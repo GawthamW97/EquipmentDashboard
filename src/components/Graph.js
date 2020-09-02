@@ -3,15 +3,17 @@ import { Bar } from "react-chartjs-2";
 import API from "../api/API";
 import { Typography, Card, Container, LinearProgress } from "@material-ui/core";
 
-const getEpuipmentQuantity = (set) => {
+// return the total number of equipments for each category as an array
+const getEpuipmentQuantity = (obj) => {
   let yValue = [];
   //get the length of the array stored in
-  for (let i = 0; i < Object.keys(set).length; i++) {
-    yValue.push(set[Object.keys(set)[i]].length);
+  for (let i = 0; i < Object.keys(obj).length; i++) {
+    yValue.push(obj[Object.keys(obj)[i]].length);
   }
   return yValue;
 };
 
+// retuns the total number of operational and non-operational equipments as an array
 const getEquipmentStatus = (data) => {
   let countOp = 0; //number of operational equipments
   let countNon = 0; // number of non-operationl equipments
@@ -26,12 +28,13 @@ const getEquipmentStatus = (data) => {
   return [countOp, countNon];
 };
 
-const getEquipmentType = (set, data) => {
+//returns an object that contains the AssetCategoryID's as the Key
+const getEquipmentType = (obj, data) => {
   let compareSet = new Set(); // a Set data structure is used to avoid data duplication
   //change the data type of the values in "set" object to array so that the AssertID can be pushed.
-  if (Object.keys(set).length === 0) {
+  if (Object.keys(obj).length === 0) {
     for (const dataObj of data) {
-      set[dataObj.AssetCategoryID] = [];
+      obj[dataObj.AssetCategoryID] = [];
     }
   } else {
     //check for new AssetCategoryID from the new api call
@@ -43,26 +46,26 @@ const getEquipmentType = (set, data) => {
 
     //getting the new fields
     let difference = Array.from(compareSet).filter(
-      (x) => !Object.keys(set).includes(x)
+      (x) => !Object.keys(obj).includes(x)
     );
 
     //setting the new fields value data type to array to push the AssertID
     for (let i = 0; i < difference.length; i++) {
-      set[difference[i]] = [];
+      obj[difference[i]] = [];
     }
   }
-  return set;
+  return obj;
 };
 
 const Graph = () => {
-  let set = {};
+  let EquipmentData = {};
 
   //react hooks
   const [chartData, setChartData] = useState({}); //contains the dataset to be displayed in a graph
   const [operational, setOperational] = useState(0); //contains the integer value of the Operational
   const [nonOperational, setNonOperational] = useState(0); //contains the integer value of the Non-Operational
   const [lastValue, setLastValue] = useState(0); //used to update the last value used in the api call
-  const [apiData, setApiData] = useState(set); //contains the API data
+  const [apiData, setApiData] = useState(EquipmentData); //contains the API data
   const [status, setStatus] = useState(false); //the visibility of the chart is controlled based on the staus value
 
   const chart = async (maxValue) => {
@@ -76,44 +79,40 @@ const Graph = () => {
 
     const { data } = response;
     //check whether this is the first api call
-    //if its not the first call then the previous set of values will be passed from "apiData" to "set".
+    //if its not the first call then the previous set of values will be passed from "apiData" to "EquipmentData".
     if (apiData.length !== 0) {
-      set = apiData;
+      EquipmentData = apiData;
     }
 
-    //store the data recieved from each api call
+    //the getEquipmentType() will set the data recieved from each api call to "EquipmentData"
     //[Key] of the object will be AssetCategoryID
     //[Value] of the object will be an array containing the corresponding AssetID
-    set = getEquipmentType(set, data);
+    EquipmentData = getEquipmentType(EquipmentData, data);
 
+    //push the AssetID values for the corresponding AssetCategoryID in the object.
     for (const dataObj of data) {
-      set[dataObj.AssetCategoryID].push(dataObj.AssetID);
-      setApiData({
-        ...apiData,
-        [dataObj.AssetCategoryID]: [set[dataObj.AssetID]],
-      });
+      EquipmentData[dataObj.AssetCategoryID].push(dataObj.AssetID);
     }
 
     //pass the values to the state.
-    setApiData(set);
+    setApiData(EquipmentData);
     setOperational(operational + getEquipmentStatus(data)[0]);
     setNonOperational(nonOperational + getEquipmentStatus(data)[1]);
     setChartData({
-      labels: Object.keys(set),
+      labels: Object.keys(EquipmentData),
       datasets: [
         {
           label: "Quantity",
           backgroundColor: "#3949ab",
           borderColor: "rgba(0,0,0,1)",
           borderWidth: 2,
-          data: getEpuipmentQuantity(set),
+          data: getEpuipmentQuantity(EquipmentData),
         },
       ],
     });
     if (data[maxValue - 1]) {
       setLastValue(data[maxValue - 1].__rowid__);
     } else {
-      console.log(false);
       setStatus(true); //when api call has returned all the data the "status" value will be updated so that the chart can be seen.
     }
   };
